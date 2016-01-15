@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:batch="http://www.springframework.org/schema/batch" xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch-2.2.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+		http://www.springframework.org/schema/util 
+		http://www.springframework.org/schema/util/spring-util-3.2.xsd
+		">
+
+	<!-- The parent job -->
+	<job id="baseJob" xmlns="http://www.springframework.org/schema/batch" abstract="true" restartable="true">
+		<listeners>
+			<listener ref="baseJobListener" />
+		</listeners>
+	</job>
+
+	<!-- Configuring a Job with one master step and 4 (denoted by grid-size) slave threads -->
+	<job id="sampleJob" xmlns="http://www.springframework.org/schema/batch" parent="baseJob" restartable="true">
+		<step id="sampleMaster.Step">
+			<partition step="sampleSlave.Step" partitioner="samplePartitioner">
+				<handler grid-size="2" task-executor="baseTaskExecutor" />
+			</partition>
+		</step>
+	</job>
+
+	<!-- parent="baseStep" -->
+	<step id="sampleSlave.Step" xmlns="http://www.springframework.org/schema/batch">
+		<tasklet transaction-manager="transactionManager">
+			<chunk reader="sampleJdbcPagingReader" processor="sampleProcessor" writer="sampleWriter" commit-interval="${sampleJob.commitInterval}"
+				skip-limit="1">
+				<batch:skippable-exception-classes>
+					<include class="java.lang.Exception" />
+					<include class="java.lang.RuntimeException" />
+				</batch:skippable-exception-classes>
+			</chunk>
+			<listeners>
+				<listener ref="baseItemListener" />
+				<listener ref="baseItemSkipListener" />
+			</listeners>
+		</tasklet>
+		<listeners>
+			<listener ref="baseStepListener" />
+		</listeners>
+	</step>
+
+	<bean id="baseJobListener" class="com.spring.batch.commons.BaseJobListener" />
+	<bean id="baseStepListener" class="com.spring.batch.commons.BaseStepListener" />
+	<bean id="baseItemListener" class="com.spring.batch.commons.BaseItemListener" />
+	<bean id="baseItemSkipListener" class="com.spring.batch.commons.BaseSkipListener" />
+	<bean id="baseTaskExecutor" class="org.springframework.core.task.SimpleAsyncTaskExecutor" />
+
+	<bean id="samplePartitioner" class="com.spring.batch.sample.SamplePartitioner">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<bean id="sampleProcessor" class="com.spring.batch.sample.SampleProcessor" scope="step" />
+	<bean id="sampleWriter" class="com.spring.batch.sample.SampleWriter" scope="step" />
+
+
+	<bean id="sampleJdbcPagingReader" class="org.springframework.batch.item.database.JdbcPagingItemReader" scope="step">
+		<property name="dataSource" ref="dataSource" />
+		<property name="queryProvider">
+			<bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+				<property name="dataSource" ref="dataSource" />
+				<property name="selectClause" value="select firstName, lastName, city, id " />
+				<property name="fromClause" value="from PERSON" />
+				<property name="whereClause" value="where id &gt;= :startingIndex and id &lt;= :endingIndex" />
+				<property name="sortKey" value="id" />
+			</bean>
+		</property>
+		<property name="parameterValues">
+			<map>
+				<entry key="startingIndex" value="#{stepExecutionContext[startId]}" />
+				<entry key="endingIndex" value="#{stepExecutionContext[endId]}" />
+			</map>
+		</property>
+		<property name="pageSize" value="10" />
+		<property name="fetchSize" value="10" />
+
+		<property name="rowMapper">
+			<bean class="com.spring.batch.sample.PersonMapper" />
+		</property>
+	</bean>
+
+</beans>

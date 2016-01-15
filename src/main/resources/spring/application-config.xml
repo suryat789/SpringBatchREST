@@ -1,0 +1,76 @@
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx" xmlns:batch="http://www.springframework.org/schema/batch"
+	xsi:schemaLocation="http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+		http://www.springframework.org/schema/batch http://www.springframework.org/schema/batch/spring-batch.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+
+	<context:annotation-config />
+	<context:component-scan base-package="com.spring.batch" />
+	<!-- <tx:annotation-driven transaction-manager="jpaTransactionManager"/> -->
+
+	<context:property-placeholder location="classpath:batch.properties, classpath:application.properties"
+		ignore-unresolvable="true" />
+	<import resource="classpath:META-INF/spring/batch/jobs/job-config.xml" />
+
+	<batch:job-repository id="jobRepository" data-source="dataSource" transaction-manager="transactionManager"
+		max-varchar-length="40000" />
+
+	<!-- <bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" /> -->
+
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<constructor-arg index="0" ref="dataSource" />
+	</bean>
+	
+	<bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+		<property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+	<!-- MYSQL DB -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" lazy-init="true" destroy-method="close">
+		<property name="driverClassName" value="${jdbc.driverClassName}" />
+		<property name="url" value="${jdbc.url}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+	</bean>
+
+	<!-- create job-meta tables automatically This can be commented to avoid running script every time. -->
+	<!-- <jdbc:initialize-database data-source="dataSource">
+		<jdbc:script location="org/springframework/batch/core/schema-drop-mysql.sql" />
+		<jdbc:script location="classpath:schema-mysql.sql" />
+	</jdbc:initialize-database> -->
+
+	<bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="packagesToScan" value="com.spring.batch.domain"></property>
+		<property name="jpaVendorAdapter">
+			<bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter" />
+		</property>
+		<property name="jpaPropertyMap">
+			<map>
+				<entry key="hibernate.default_schema" value="${jdbc.default.schema}" />
+				<entry key="hibernate.show_sql" value="${hibernate.show_sql}" />
+				<entry key="hibernate.format_sql" value="${hibernate.format_sql}" />
+				<entry key="hibernate.transaction.flush_before_completion" value="true" />
+				<entry key="hibernate.transaction.auto_close_session" value="false" />
+				<entry key="hibernate.dialect" value="${hibernate.dialect}" />
+				<entry key="hibernate.current_session_context_class" value="jta" />
+			</map>
+		</property>
+	</bean>
+
+	<bean id="entityManager" class="org.springframework.orm.jpa.support.SharedEntityManagerBean">
+		<property name="entityManagerFactory" ref="entityManagerFactory" />
+	</bean>
+
+	<!-- <bean id="jpaTransactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+		<property name="entityManagerFactory" ref="entityManagerFactory" />
+	</bean> -->
+
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<bean id="persistenceExceptionTranslationPostProcessor" class="org.springframework.dao.annotation.PersistenceExceptionTranslationPostProcessor" />
+</beans>
